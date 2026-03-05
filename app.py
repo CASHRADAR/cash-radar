@@ -2,9 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
+import pytz
 
-# 1. إعدادات المنصة
-st.set_page_config(page_title="CASH RADAR PRO | Operating Logic", page_icon="📡", layout="wide")
+# 1. إعدادات المنصة الفخمة
+st.set_page_config(page_title="CASH RADAR PRO", page_icon="📡", layout="wide")
 
 # 2. تصميم الواجهة (Luxury Neon UI)
 st.markdown("""
@@ -26,7 +27,7 @@ st.markdown("""
 
 st.markdown("<h1>📡 CASH RADAR PRO</h1>")
 
-# 3. مصفوفة ذكاء القطاعات (بناءً على الربح التشغيلي)
+# 3. مصفوفة ذكاء القطاعات
 SECTOR_DATA = {
     'Financial Services': {'pe_limit': 15, 'de_limit': 2.5, 'roe_min': 15, 'op_margin_min': 25},
     'Technology': {'pe_limit': 25, 'de_limit': 0.4, 'roe_min': 20, 'op_margin_min': 15},
@@ -40,7 +41,7 @@ with st.sidebar:
     scan_btn = st.button("تفعيل المسح الراداري ✨")
 
 if scan_btn:
-    with st.spinner("جاري تدقيق الأرباح التشغيلية وفصل البنود الاستثنائية..."):
+    with st.spinner("جاري حل تعارض المناطق الزمنية وتدقيق البيانات التشغيلية..."):
         try:
             ticker_sym = f"{symbol}.SR"
             stock = yf.Ticker(ticker_sym)
@@ -63,52 +64,51 @@ if scan_btn:
                     icon = "✅" if is_pass else "❌"
                     return f"<tr class='{s_class}'><td><b>{name}</b></td><td class='{t_class}'>{icon} {result}</td><td>{criteria}</td><td class='desc-text'>{philosophy}</td></tr>"
 
-                # 1. المكرر التشغيلي (استخدام أرباح التشغيل فقط)
+                # --- 1. إصلاح مشكلة التوزيعات (توحيد التوقيت) ---
+                if not divs.empty:
+                    # تحويل الوقت الحالي لنفس منطقة زمنية البيانات (الرياض)
+                    tz = divs.index.tz
+                    one_year_ago = datetime.now(tz) - timedelta(days=365)
+                    real_divs = divs[divs.index > one_year_ago].sum()
+                else:
+                    real_yield = 0
+                    real_divs = 0
+                
+                real_yield = (real_divs / price) * 100 if price > 0 else 0
+
+                # --- 2. مكرر الربحية التشغيلي والهوامش ---
                 op_margin = (info.get('operatingMargins', 0) or 0) * 100
                 pe_val = info.get('trailingPE') or (price / (info.get('trailingEps') or 1))
-                # إذا كان صافي الربح أكبر بكثير من الربح التشغيلي، يتم تعديل التقييم
-                rows_html += add_row("مكرر الربحية التشغيلي", f"{pe_val:.2f}", f"< {logic['pe_limit']}", "جراهام: نركز على الربح الناتج من صلب نشاط الشركة وليس بيع الأصول.", 0 < pe_val <= logic['pe_limit'])
 
-                # 2. الهامش التشغيلي (Operating Margin)
-                rows_html += add_row("الهامش التشغيلي", f"{op_margin:.1f}%", f"> {logic['op_margin_min']}%", "بافيت: يعكس كفاءة الشركة في تحويل المبيعات إلى ربح قبل الفوائد والضرائب.", op_margin >= logic['op_margin_min'])
-
-                # 3. عائد التوزيع الحقيقي (يدوي)
-                one_year_ago = datetime.now() - timedelta(days=365)
-                real_divs = divs[divs.index > one_year_ago].sum() if not divs.empty else 0
-                r_yield = (real_divs / price) * 100
-                rows_html += add_row("عائد التوزيع الحقيقي", f"{r_yield:.2f}%", "> 4%", "لينش: العائد النقدي الفعلي هو الدليل المادي الوحيد على جودة الأرباح.", r_yield >= 4.0)
-
-                # 4. نسبة التوزيع (Payout)
+                # --- 3. بناء الجدول التشغيلي الكامل ---
+                rows_html += add_row("المكرر التشغيلي", f"{pe_val:.2f}", f"< {logic['pe_limit']}", "جراهام: نشتري الربح التشغيلي الحقيقي لضمان هامش الأمان السعري.", 0 < pe_val <= logic['pe_limit'])
+                rows_html += add_row("الهامش التشغيلي", f"{op_margin:.1f}%", f"> {logic['op_margin_min']}%", "بافيت: يعكس كفاءة الشركة في تحويل المبيعات إلى ربح حقيقي.", op_margin >= logic['op_margin_min'])
+                rows_html += add_row("عائد التوزيع الحقيقي", f"{real_yield:.2f}%", "> 4%", "لينش: العائد النقدي الفعلي هو الدليل المادي الوحيد على جودة الأرباح.", real_yield >= 4.0)
+                
                 payout = (info.get('payoutRatio', 0) or 0) * 100
                 payout = payout / 100 if payout > 100 else payout
-                rows_html += add_row("نسبة التوزيع (Payout)", f"{payout:.1f}%", "20% - 75%", "المعيار: النسبة المتزنة تضمن استقرار التوزيع حتى في سنوات الركود.", 20 <= payout <= 75)
+                rows_html += add_row("نسبة التوزيع (Payout)", f"{payout:.1f}%", "20% - 75%", "المعيار: النسبة المتزنة تضمن استقرار التوزيع وتدعم نمو الشركة.", 20 <= payout <= 75)
 
-                # 5. كفاءة الإدارة (ROE)
                 roe = (info.get('returnOnEquity', 0) or 0) * 100
                 rows_html += add_row("كفاءة الإدارة (ROE)", f"{roe:.1f}%", f"> {logic['roe_min']}%", "بافيت: قدرة الإدارة على تنمية أموال المساهمين ذاتهم ببراعة.", roe >= logic['roe_min'])
 
-                # 6. نسبة الديون (D/E)
                 de = (info.get('debtToEquity', 0) or 0) / 100
-                rows_html += add_row("نسبة الديون", f"{de:.2f}", f"< {logic['de_limit']}", "الملاءة: الديون المنخفضة تمنح الشركة حصانة ضد تقلبات الفائدة.", de <= logic['de_limit'])
+                rows_html += add_row("نسبة الديون (D/E)", f"{de:.2f}", f"< {logic['de_limit']}", "الملاءة: الديون المنخفضة تمنح الشركة حصانة ضد تقلبات الفائدة.", de <= logic['de_limit'])
 
-                # 7. سجل التوزيعات (سنوات)
                 div_yrs = len(divs.groupby(divs.index.year).sum())
                 rows_html += add_row("سجل التوزيع", f"{div_yrs} سنة", "> 10 سنوات", "جراهام: الاستمرارية لعقد تثبت صلابة العمل في أقسى الظروف.", div_yrs >= 10)
 
-                # --- العرض النهائي ---
-                st.subheader(f"💎 تقرير التدقيق التشغيلي لشركة: {info.get('longName', symbol)}")
+                # --- 4. العرض النهائي الفخم ---
+                st.subheader(f"💎 تقرير التدقيق التشغيلي: {info.get('longName', symbol)}")
                 
                 s_text = "🏆 سهم أرستقراطي ذهبي" if score >= 6 else "🟡 سهم عوائد جيد" if score >= 4 else "🔴 فخ عائد - مخاطرة عالية"
                 s_color = "#00ff41" if score >= 6 else "#bb86fc" if score >= 4 else "#ff003c"
-                st.markdown(f"<div class='status-box' style='color:{s_color};'>{s_text} ({score}/7)</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='status-box' style='color:{s_color};'>{status_text if 'status_text' in locals() else s_text} ({score}/7)</div>", unsafe_allow_html=True)
                 if score >= 6: st.balloons()
 
-                st.markdown(f"<table class='styled-table'><thead><tr><th>المؤشر التشغيلي</th><th>النتيجة الفعلية</th><th>المعيار المطلوب</th><th>الفلسفة الاستثمارية</th></tr></thead><tbody>{rows_html}</tbody></table>", unsafe_allow_html=True)
-
-            else:
-                st.error("❌ تعذر جلب البيانات. الرمز قد يكون غير صحيح.")
+                st.markdown(f"<table class='styled-table'><thead><tr><th>المؤشر المالي</th><th>النتيجة الفعلية</th><th>المعيار المطلوب</th><th>الفلسفة الاستثمارية</th></tr></thead><tbody>{rows_html}</tbody></table>", unsafe_allow_html=True)
 
         except Exception as e:
-            st.error(f"⚠️ خطأ تقني في الاتصال بمزود البيانات: {e}")
+            st.error(f"⚠️ حدث خطأ تقني: {e}")
 
-st.markdown("<p style='text-align: center; color: #444; font-size: 0.8em; margin-top: 50px;'>CASH RADAR PRO | OPERATING EDITION 2026</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #444; font-size: 0.8em; margin-top: 50px;'>CASH RADAR PRO | BUG FIXED EDITION 2026</p>", unsafe_allow_html=True)
