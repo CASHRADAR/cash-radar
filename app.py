@@ -2,110 +2,135 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 
-# 1. إعدادات المنصة
-st.set_page_config(page_title="CASH RADAR PRO | High Fidelity", layout="wide")
+# 1. إعدادات المنصة الفخمة
+st.set_page_config(page_title="CASH RADAR PRO | Elite Edition", page_icon="📡", layout="wide")
 
-# 2. الواجهة البنفسجية المتطورة (Luxury Dark Theme)
+# 2. واجهة المستخدم البنفسجية المتطورة (Luxury Grid UI)
 st.markdown("""
     <style>
-    .stApp { background-color: #0b0b10; color: #ffffff; }
-    h1 { color: #bb86fc; text-shadow: 0 0 20px rgba(187, 134, 252, 0.4); text-align: center; font-weight: 800; }
-    .sector-note { background: rgba(187, 134, 252, 0.05); border-right: 5px solid #bb86fc; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-size: 0.9em; line-height: 1.6; }
-    .result-card { background: #161620; border-right: 5px solid #bb86fc; padding: 18px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #252535; }
-    .metric-name { color: #bb86fc; font-weight: bold; }
-    .metric-value { color: #03dac6; font-size: 1.2em; font-weight: 700; }
-    .status-box { padding: 25px; border-radius: 15px; text-align: center; font-size: 1.7em; font-weight: 800; background: #1a1a2e; border: 2px solid #3700b3; }
+    .stApp { background-color: #08080c; color: #ffffff; }
+    h1 { color: #bb86fc; text-shadow: 0 0 15px rgba(187, 134, 252, 0.5); text-align: center; font-weight: 800; }
+    .status-box { padding: 30px; border-radius: 15px; text-align: center; font-size: 1.8em; font-weight: 800; margin: 20px 0; background: #161620; border: 2px solid #3700b3; }
+    
+    /* تصميم الجدول التنفيذي */
+    .styled-table { width: 100%; border-collapse: collapse; margin: 25px 0; font-size: 0.95em; border-radius: 10px; overflow: hidden; background: #1a1a24; }
+    .styled-table thead tr { background-color: #4a148c; color: #bb86fc; text-align: right; font-weight: bold; }
+    .styled-table th, .styled-table td { padding: 15px 20px; border-bottom: 1px solid #252535; text-align: right; }
+    .styled-table tbody tr:hover { background-color: rgba(187, 134, 252, 0.05); }
+    .pass-val { color: #03dac6; font-weight: bold; }
+    .fail-val { color: #cf6679; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown("<h1>📡 CASH RADAR PRO</h1>")
+st.markdown("<p style='text-align: center; color: #888;'>إصدار التدقيق المالي المتطور - تحليل النخبة للسوق السعودي</p>", unsafe_allow_html=True)
 
-# 3. مصفوفة "الالتزام بجوهر المحللين" (تعديل قطاع التقنية ليكون صارماً)
-SECTOR_LOGIC = {
-    'Technology': {
-        'pe_limit': 25, 'de_limit': 0.4, 'payout': [20, 60], 'roe_min': 20,
-        'note': "⚠️ **رؤية بافيت ولينش للتقنية:** لا ننجرف خلف المكررات الفلكية. اشترطنا مكرر أقصى 25 (لينش)، وديون منخفضة جداً أقل من 0.4، وعائد حقوق مساهمين مرتفع جداً (ROE > 20%) لضمان الجودة."
-    },
-    'Financial Services': {
-        'pe_limit': 15, 'de_limit': 2.5, 'payout': [30, 70], 'roe_min': 15,
-        'note': "💡 **قطاع مالي:** نعتمد مكرر جراهام الصارم (15). الديون هنا ودائع، لذا نركز على استقرار التوزيعات وكفاءة الإدارة."
-    },
-    'Real Estate': {
-        'pe_limit': 22, 'de_limit': 1.0, 'payout': [70, 95], 'roe_min': 8,
-        'note': "🏠 **قطاع عقاري (REIT):** نلتزم بنظام الـ 90% توزيع. الديون مقبولة لتمويل الأصول الثابتة التي تدر إيجارات."
-    },
-    'Utilities': {
-        'pe_limit': 15, 'de_limit': 1.2, 'payout': [40, 85], 'roe_min': 10,
-        'note': "⚡ **قطاع المرافق:** شركات دفاعية. نقبل ديون أعلى قليلاً لاستقرار الكاش، لكن بمكرر منخفض جداً (جراهام)."
-    },
-    'Default': {
-        'pe_limit': 18, 'de_limit': 0.5, 'payout': [20, 70], 'roe_min': 15,
-        'note': "⚖️ **المعايير القياسية:** الالتزام الحرفي بمدرسة الاستثمار القيمة (P/E < 18، ديون < 0.5)."
-    }
+# 3. مصفوفة القطاعات المحدثة (مقرونة بمتوسطات السوق التقديرية)
+SECTOR_DATA = {
+    'Financial Services': {'pe_avg': 16.5, 'de_limit': 2.0, 'payout_avg': 55, 'roe_avg': 16, 'note': "💡 قطاع مالي: السيولة تتبع معايير SAMA."},
+    'Technology': {'pe_avg': 28.0, 'de_limit': 0.35, 'payout_avg': 40, 'roe_avg': 22, 'note': "🚀 تقنية: نركز على انعدام الديون وكفاءة الإدارة (ROE)."},
+    'Real Estate': {'pe_avg': 22.0, 'de_limit': 1.0, 'payout_avg': 90, 'roe_avg': 9, 'note': "🏠 عقار: التوزيع المرتفع (90%+) هو معيار النجاح."},
+    'Utilities': {'pe_avg': 14.0, 'de_limit': 1.3, 'payout_avg': 65, 'roe_avg': 11, 'note': "⚡ مرافق: الاستقرار النقدي يسمح بديون أعلى قليلاً."},
+    'Energy': {'pe_avg': 15.0, 'de_limit': 0.7, 'payout_avg': 60, 'roe_avg': 18, 'note': "⛽ طاقة: نركز على العائد المستدام والمكرر المنخفض."},
+    'Default': {'pe_avg': 18.0, 'de_limit': 0.5, 'payout_avg': 50, 'roe_avg': 15, 'note': "⚖️ معايير قياسية: الالتزام الصارم بمدرسة القيمة."}
 }
 
 with st.sidebar:
-    st.markdown("<h3 style='color: #bb86fc;'>🔍 رادار النخبة الاستثمارية</h3>", unsafe_allow_html=True)
-    symbol = st.text_input("رمز السهم (مثال: 2222، 7202، 1150):", "2222")
-    scan_btn = st.button("بدء المسح الراداري 🚀")
+    st.markdown("<h3 style='color: #bb86fc;'>🔍 رادار التحكم</h3>", unsafe_allow_html=True)
+    symbol = st.text_input("رمز السهم (تداول):", "2222")
+    scan_btn = st.button("تفعيل المسح الاحترافي ✨")
 
 if scan_btn:
-    with st.spinner("جاري تدقيق البيانات وفق معايير بافيت وجراهام..."):
+    with st.spinner("جاري إجراء المسح العشري وتدقيق القوائم المالية..."):
         ticker_sym = f"{symbol}.SR"
         stock = yf.Ticker(ticker_sym)
-        
         try:
-            info = stock.info
-            divs = stock.dividends
-            price = info.get('regularMarketPrice', 1)
-            sector = info.get('sector', 'Default')
-            
-            # جلب المنطق المخصص
-            logic = SECTOR_LOGIC.get(sector, SECTOR_LOGIC['Default'])
-            if 'REIT' in info.get('industry', ''): logic = SECTOR_LOGIC['Real Estate']
+            info, fin, divs = stock.info, stock.financials, stock.dividends
+            if 'regularMarketPrice' in info:
+                price = info.get('regularMarketPrice', 1)
+                sector = info.get('sector', 'Default')
+                logic = SECTOR_DATA.get(sector, SECTOR_DATA['Default'])
+                if 'REIT' in info.get('industry', ''): logic = SECTOR_DATA['Real Estate']
 
-            # --- حسابات الدقة الحيوية ---
-            pe_val = info.get('trailingPE') or (price / (info.get('trailingEps') or 1))
-            de_ratio = (info.get('debtToEquity', 0) or 0) / 100
-            roe = (info.get('returnOnEquity', 0) or 0) * 100
-            payout = (info.get('payoutRatio', 0) or 0) * 100
-            if payout > 100: payout = payout / 100
-            
-            # العائد الحقيقي لآخر 365 يوم
-            real_yield = (divs.last('365D').sum() / price) * 100 if not divs.empty else 0
-            div_yrs = len(divs.groupby(divs.index.year).sum())
+                score = 0
+                rows = []
 
-            st.subheader(f"💎 تحليل: {info.get('longName', symbol)}")
-            st.markdown(f"<div class='sector-note'>{logic['note']}</div>", unsafe_allow_html=True)
-            
-            score = 0
-            def display_card(icon, name, value, desc, is_pass):
-                global score
-                if is_pass: score += 1
-                color = "#03dac6" if is_pass else "#cf6679"
-                st.markdown(f"""
-                    <div class="result-card" style="border-right-color: {color};">
-                        <span class='metric-name'>{icon} {name}</span> | <span class='metric-value'>{value}</span><br>
-                        <span style='color: #888; font-size: 0.85em;'>🎯 المعيار: {desc}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                # --- دالة إضافة البيانات المنظمة ---
+                def add_row(icon, name, result, sector_avg, criteria, philosophy, is_pass):
+                    global score
+                    if is_pass: score += 1
+                    status_class = "pass-val" if is_pass else "fail-val"
+                    icon_status = "✅" if is_pass else "❌"
+                    rows.append(f"""
+                        <tr>
+                            <td>{icon} {name}</td>
+                            <td class='{status_class}'>{icon_status} {result}</td>
+                            <td>{sector_avg}</td>
+                            <td>{criteria}</td>
+                            <td>{philosophy}</td>
+                        </tr>
+                    """)
 
-            # --- تطبيق المعايير الصارمة ---
-            display_card("📅", "استمرارية التوزيع", f"{div_yrs} سنة", "أكثر من 10 سنوات (جراهام).", div_yrs >= 10)
-            display_card("📈", "مكرر الربحية (P/E)", f"{pe_val:.2f}", f"أقل من {logic['pe_limit']} (الانضباط السعري).", 0 < pe_val <= logic['pe_limit'])
-            display_card("💰", "العائد الحقيقي", f"{real_yield:.2f}%", "عائد فوق 4% (المصدر الحقيقي للدخل).", real_yield >= 4.0)
-            display_card("⚖️", "نسبة التوزيع (Payout)", f"{payout:.1f}%", f"بين {logic['payout'][0]}% و {logic['payout'][1]}% (الاستدامة).", logic['payout'][0] <= payout <= logic['payout'][1])
-            display_card("📉", "نسبة الديون (D/E)", f"{de_ratio:.2f}", f"أقل من {logic['de_limit']} (الأمان المالي).", de_ratio <= logic['de_limit'])
-            display_card("🚀", "كفاءة الإدارة (ROE)", f"{roe:.1f}%", f"فوق {logic['roe_min']}% (كفاءة توليد الأرباح).", roe >= logic['roe_min'])
+                # 1. المكرر التشغيلي (صارم < 15)
+                op_inc = fin.loc['Operating Income'].iloc[0] if 'Operating Income' in fin.index else 0
+                pe_op = price / (op_inc / info.get('sharesOutstanding', 1)) if op_inc > 0 else 0
+                add_row("📈", "المكرر التشغيلي", f"{pe_op:.2f}", f"{logic['pe_avg']}", "< 15 (أمان)", "جراهام: نشتري الربح التشغيلي الحقيقي بسعر رخيص لضمان هامش الأمان.", 0 < pe_op <= 15)
 
-            st.write("---")
-            if score >= 5:
-                st.markdown(f"<div class='status-box' style='color:#03dac6;'>🏆 سهم نخبة ذهبي ({score}/6)</div>", unsafe_allow_html=True)
-                st.balloons()
-            else:
-                st.markdown(f"<div class='status-box' style='color:#cf6679;'>🔴 سهم خارج النطاق ({score}/6)</div>", unsafe_allow_html=True)
+                # 2. العائد الحقيقي (يدوي)
+                real_yield = (divs.last('365D').sum() / price) * 100 if not divs.empty else 0
+                add_row("💰", "عائد التوزيع", f"{real_yield:.2f}%", "4.5%", "> 4%", "لينش: العائد النقدي هو الدليل الملموس على صدق أرباح الشركة ومكافأة المستثمر.", real_yield >= 4.0)
 
-        except Exception as e:
-            st.error(f"⚠️ خطأ في معالجة البيانات: {e}")
+                # 3. نسبة التوزيع (Payout)
+                payout = (info.get('payoutRatio', 0) or 0) * 100
+                if payout > 100: payout /= 100
+                add_row("⚖️", "نسبة التوزيع", f"{payout:.1f}%", f"{logic['payout_avg']}%", "20% - 70%", "المعيار: النسبة المتزنة تحمي التوزيعات من القطع وتسمح للشركة بالنمو الذاتي.", 20 <= payout <= 75 if sector != 'Real Estate' else 70 <= payout <= 95)
 
-st.markdown("<p style='text-align: center; color: #444; font-size: 0.8em; margin-top: 50px;'>CASH RADAR PRO | 2026 EDITION</p>", unsafe_allow_html=True)
+                # 4. كفاءة الإدارة (ROE)
+                roe = (info.get('returnOnEquity', 0) or 0) * 100
+                add_row("🚀", "كفاءة الإدارة (ROE)", f"{roe:.1f}%", f"{logic['roe_avg']}%", f"> {logic['roe_avg']}%", "بافيت: قدرة الإدارة على توليد ثروة من كل ريال يملكه المساهمون.", roe >= logic['roe_avg'])
+
+                # 5. نسبة الديون (D/E)
+                de = (info.get('debtToEquity', 0) or 0) / 100
+                add_row("🛡️", "نسبة الديون", f"{de:.2f}", f"< {logic['de_limit']}", f"< {logic['de_limit']}", "الملاءة: الديون المنخفضة تمنح الشركة حصانة ضد تقلبات الفائدة البنكية.", de <= logic['de_limit'])
+
+                # 6. استمرارية التوزيع
+                div_yrs = len(divs.groupby(divs.index.year).sum())
+                add_row("📅", "سجل التوزيع", f"{div_yrs} سنة", "10+ سنوات", "> 10 سنوات", "جراهام: الاستمرارية لعقد من الزمن تثبت صلابة نموذج العمل في الأزمات.", div_yrs >= 10)
+
+                # 7. السيولة (Current Ratio)
+                cr = info.get('currentRatio', 0) or 1.5
+                add_row("💧", "نسبة السيولة", f"{cr:.2f}", "1.5", "> 1.5", "الأمان: توفر الكاش لسداد الالتزامات دون الحاجة لتسييل الأصول.", cr >= 1.5)
+
+                # --- عرض النتائج ---
+                st.subheader(f"💎 تقرير التدقيق لشركة: {info.get('longName', symbol)}")
+                st.info(logic['note'])
+
+                if score >= 6:
+                    st.markdown(f"<div class='status-box' style='color:#03dac6;'>🏆 التصنيف: سهم أرستقراطي ذهبي ({score}/7)</div>", unsafe_allow_html=True); st.balloons()
+                elif score >= 4:
+                    st.markdown(f"<div class='status-box' style='color:#bb86fc;'>🟡 التصنيف: سهم عوائد جيد ({score}/7)</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<div class='status-box' style='color:#cf6679;'>🔴 التصنيف: فخ عائد - مخاطرة عالية ({score}/7)</div>", unsafe_allow_html=True)
+
+                # إنشاء الجدول HTML
+                table_html = f"""
+                <table class='styled-table'>
+                    <thead>
+                        <tr>
+                            <th>المؤشر المالي</th>
+                            <th>النتيجة الفعلية</th>
+                            <th>متوسط القطاع</th>
+                            <th>المعيار المطلوب</th>
+                            <th>الفلسفة الاستثمارية</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {''.join(rows)}
+                    </tbody>
+                </table>
+                """
+                st.markdown(table_html, unsafe_allow_html=True)
+            else: st.error("❌ فشل المسح: تعذر الوصول للبيانات.")
+        except Exception as e: st.error(f"⚠️ خطأ تقني: {e}")
+
+st.markdown("<p style='text-align: center; color: #444; font-size: 0.8em; margin-top: 50px;'>CASH RADAR PRO - ULTIMATE INVESTOR EDITION 2026</p>", unsafe_allow_html=True)
