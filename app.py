@@ -3,106 +3,80 @@ import yfinance as yf
 import pandas as pd
 
 # إعدادات الصفحة
-st.set_page_config(page_title="كاش رادار | نسخة النخبة الاستثمارية", layout="wide")
+st.set_page_config(page_title="كاش رادار: نسخة التدقيق التشغيلي", layout="wide")
+st.markdown("<h1 style='text-align: center; color: #00c853;'>📡 كاش رادار: نسخة التدقيق التشغيلي</h1>", unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center; color: #00c853;'>📡 كاش رادار: التدقيق المالي المعتمد</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #8b949e;'>تحليل شامل وفق معايير (بنجامين جراهام، وارن بافيت، وبيتر لينش)</p>", unsafe_allow_html=True)
+# قاموس الديون الآمنة حسب القطاع (Debt/Equity)
+SECTOR_DEBT_LIMITS = {
+    'Energy': 0.80, 'Utilities': 1.20, 'Real Estate': 1.00,
+    'Materials': 0.60, 'Industrials': 0.50, 'Consumer Defensive': 0.50,
+    'Financial Services': 2.00, 'Technology': 0.40, 'Default': 0.50
+}
 
 symbol = st.sidebar.text_input("🔍 رمز السهم (مثال: 2222):", "2222")
 
-if st.sidebar.button("تشغيل المسح العميق 🚀"):
-    with st.spinner("جاري فحص القوائم المالية وتطبيق معايير النخبة..."):
+if st.sidebar.button("تشغيل المسح الاحترافي 🚀"):
+    with st.spinner("جاري تنقية الأرباح والتوزيعات من البنود الاستثنائية..."):
         ticker_sym = f"{symbol}.SR"
         stock = yf.Ticker(ticker_sym)
         info = stock.info
+        financials = stock.financials # قائمة الدخل
         divs = stock.dividends
         
-        if not divs.empty and 'regularMarketPrice' in info:
+        if not financials.empty and 'regularMarketPrice' in info:
             score = 0
             results = []
+            sector = info.get('sector', 'Default')
+            debt_limit = SECTOR_DEBT_LIMITS.get(sector, SECTOR_DEBT_LIMITS['Default'])
 
-            # --- المحور الأول: سجل التاريخ (الماضي) ---
-            yearly_divs = divs.groupby(divs.index.year).sum()
-            div_years_count = len(yearly_divs)
+            # 1. حساب مكرر الربحية التشغيلي (استبعاد الأرباح غير المتكررة)
+            # Operating Income vs Net Income
+            op_income = financials.loc['Operating Income'].iloc[0] if 'Operating Income' in financials.index else 0
+            net_income = financials.loc['Net Income'].iloc[0] if 'Net Income' in financials.index else 1
+            price = info.get('regularMarketPrice', 1)
+            eps = info.get('trailingEps', 1)
             
-            # 1. سجل التوزيعات
-            if div_years_count >= 10:
+            # إذا كان صافي الربح أكبر بكثير من التشغيلي، فهناك أرباح استثنائية
+            is_extraordinary = net_income > (op_income * 1.2)
+            pe_op = price / (op_income / info.get('sharesOutstanding', 1)) if op_income > 0 else 0
+            
+            if 0 < pe_op <= 20:
                 score += 1
-                results.append(f"✅ **مؤشر استمرارية التوزيعات:** الشركة وزعت لـ ({div_years_count}) سنة مستمرة. (المعيار: > 10 سنوات)")
+                results.append(f"✅ **مكرر الربحية التشغيلي:** عادل ({pe_op:.2f}). (تم استبعاد الأرباح الاستثنائية: {'نعم' if is_extraordinary else 'لا'})")
             else:
-                results.append(f"❌ **مؤشر استمرارية التوزيعات:** السجل قصير ({div_years_count}) سنة فقط. (المعيار: > 10 سنوات)")
+                results.append(f"❌ **مكرر الربحية التشغيلي:** مرتفع أو غير مستقر ({pe_op:.2f}).")
 
-            # 2. نمو التوزيع (آخر 5 سنوات)
-            if len(yearly_divs) >= 5:
-                last_5 = yearly_divs.tail(5)
-                growth = ((last_5.iloc[-1] - last_5.iloc[0]) / last_5.iloc[0]) * 100
-                if growth > 0:
+            # 2. تنقية التوزيعات (استبعاد التوزيعات الاستثنائية)
+            if not divs.empty:
+                # استبعاد القيم التي تزيد عن متوسط التوزيع بـ 3 أضعاف (كاستثناء)
+                avg_div = divs.tail(8).mean() 
+                clean_divs = divs[divs <= (avg_div * 2.5)].last('365D').sum()
+                clean_yield = clean_divs / price
+                if clean_yield >= 0.04:
                     score += 1
-                    results.append(f"✅ **مؤشر نمو التوزيعات:** زادت بنسبة ({growth:.1f}%) خلال آخر 5 سنوات. (المعيار: نمو إيجابي)")
+                    results.append(f"✅ **عائد التوزيع المستدام:** مجزي ({clean_yield*100:.1f}%). (مستبعد منها التوزيعات الخاصة)")
                 else:
-                    results.append(f"❌ **مؤشر نمو التوزيعات:** لم يتحقق نمو ({growth:.1f}%). (المعيار: نمو إيجابي)")
+                    results.append(f"❌ **عائد التوزيع المستدام:** منخفض ({clean_yield*100:.1f}%).")
 
-            # --- المحور الثاني: الملاءة المالية (الحاضر) ---
-            # 3. نسبة التوزيع
-            payout = (info.get('payoutRatio', 0) or 0) * 100
-            if 20 <= payout <= 70:
+            # 3. نسبة الديون حسب القطاع
+            de_ratio = info.get('debtToEquity', 0) / 100
+            if de_ratio <= debt_limit:
                 score += 1
-                results.append(f"✅ **مؤشر نسبة التوزيع (Payout Ratio):** النسبة مثالية ({payout:.1f}%). (المعيار: 20% - 70%)")
+                results.append(f"✅ **نسبة الديون (D/E):** آمنة لهذا القطاع ({de_ratio:.2f}). (الحد الأقصى لقطاع {sector}: {debt_limit})")
             else:
-                results.append(f"❌ **مؤشر نسبة التوزيع (Payout Ratio):** النسبة غير متزنة ({payout:.1f}%). (المعيار: 20% - 70%)")
+                results.append(f"❌ **نسبة الديون (D/E):** مرتفعة لقطاع {sector} ({de_ratio:.2f}).")
 
-            # 4. نسبة السيولة
-            curr_ratio = info.get('currentRatio', 0) or 0
-            if curr_ratio >= 1.5:
-                score += 1
-                results.append(f"✅ **مؤشر نسبة السيولة (Current Ratio):** سيولة قوية ({curr_ratio:.2f}). (المعيار: > 1.5)")
-            else:
-                results.append(f"❌ **مؤشر نسبة السيولة (Current Ratio):** سيولة ضعيفة ({curr_ratio:.2f}). (المعيار: > 1.5)")
-
-            # 5. نسبة الديون
-            de_ratio = info.get('debtToEquity', 0) or 0
-            if 0 < de_ratio <= 60:
-                score += 1
-                results.append(f"✅ **مؤشر نسبة الديون (D/E Ratio):** ديون آمنة ({de_ratio:.1f}%). (المعيار: < 60%)")
-            else:
-                results.append(f"❌ **مؤشر نسبة الديون (D/E Ratio):** ديون مقلقة ({de_ratio:.1f}%). (المعيار: < 60%)")
-
-            # --- المحور الثالث: الجودة والسعر (المستقبل) ---
-            # 6. مكرر الربحية
-            pe = info.get('trailingPE', 0) or 0
-            if 0 < pe <= 20:
-                score += 1
-                results.append(f"✅ **مكرر الربحية (P/E Ratio):** السعر عادل حالياً ({pe:.2f}). (المعيار: < 20)")
-            else:
-                results.append(f"❌ **مكرر الربحية (P/E Ratio):** السعر متضخم ({pe:.2f}). (المعيار: < 20)")
-
-            # 7. العائد على حقوق المساهمين
-            roe = (info.get('returnOnEquity', 0) or 0) * 100
-            if roe >= 15:
-                score += 1
-                results.append(f"✅ **مؤشر كفاءة الإدارة (ROE):** كفاءة عالية ({roe:.1f}%). (المعيار: > 15%)")
-            else:
-                results.append(f"❌ **مؤشر كفاءة الإدارة (ROE):** كفاءة ضعيفة ({roe:.1f}%). (المعيار: > 15%)")
-
-            # --- التقييم النهائي ---
-            st.header(f"تقرير التدقيق المالي لشركة: {info.get('longName', symbol)}")
+            # عرض التقرير النهائي
+            st.header(f"تقرير التدقيق الاحترافي لـ {info.get('longName', symbol)}")
+            st.write(f"**القطاع المستهدف:** {sector}")
             st.write("---")
             
-            if score >= 6:
-                st.success(f"🏆 النتيجة النهائية لـ كاش رادار: {score}/7 | السهم ضمن النخبة الأرستقراطية.")
-            elif score >= 4:
-                st.warning(f"🟡 النتيجة النهائية لـ كاش رادار: {score}/7 | سهم عوائد جيد ولكن يحتاج لمراقبة.")
+            if score >= 2:
+                st.success(f"🏆 النتيجة النهائية: {score}/3 | السهم اجتاز فلاتر الأرباح الحقيقية.")
             else:
-                st.error(f"🔴 النتيجة النهائية لـ كاش رادار: {score}/7 | فخ عائد محتمل - مخاطرة عالية.")
+                st.error(f"🔴 النتيجة النهائية: {score}/3 | تنبيه: السهم يعتمد على بنود استثنائية أو ديونه مقلقة.")
 
-            # عرض القائمة التفصيلية بربط المؤشر بالنتيجة والمعيار
-            st.subheader("📋 تفاصيل نتائج رادار النخبة:")
             for r in results:
                 st.write(r)
-                
-            # إضافة الرسم البياني للتوزيعات
-            with st.expander("👁️ تدقيق سجل التوزيعات السنوية الفعلي"):
-                st.bar_chart(yearly_divs)
-                st.table(yearly_divs.sort_index(ascending=False))
         else:
-            st.error("❌ تعذر جلب بيانات التوزيعات أو الميزانية. تأكد من الرمز (مثال: 2222 للسوق السعودي).")
+            st.error("❌ تعذر جلب البيانات. يرجى التأكد من الرمز.")
