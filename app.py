@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
-import pytz
 
 # 1. إعدادات المنصة الاحترافية
 st.set_page_config(page_title="CASH RADAR PRO", page_icon="📡", layout="wide")
@@ -26,37 +25,49 @@ st.markdown("""
     .pass-text { color: #00ff41; font-weight: bold; }
     .fail-text { color: #ff003c; font-weight: bold; }
     .desc-text { color: #a0a0a0; font-size: 0.85em; line-height: 1.5; }
-    .source-link { color: #bb86fc; text-decoration: none; border: 1px solid #bb86fc; padding: 3px 8px; border-radius: 5px; font-size: 0.8em; }
-    .source-link:hover { background: #bb86fc; color: black; }
+    
+    /* أزرار البحث الذكية */
+    .search-btn { 
+        display: inline-block;
+        padding: 5px 12px;
+        background-color: transparent;
+        color: #bb86fc;
+        border: 1px solid #bb86fc;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 0.8em;
+        transition: 0.3s;
+    }
+    .search-btn:hover { background-color: #bb86fc; color: #000; shadow: 0 0 10px #bb86fc; }
     </style>
     """, unsafe_allow_html=True)
 
 st.markdown("<h1>📡 CASH RADAR PRO</h1>")
 
-# 3. مصفوفة ذكاء القطاعات (معايير بافيت وجراهام)
+# 3. مصفوفة ذكاء القطاعات
 SECTOR_DATA = {
     'Financial Services': {'pe_limit': 15, 'de_limit': 8.0, 'roe': 15, 'payout': 20, 'note': "💡 قطاع مالي: الودائع هي وقود العمل، المديونية هنا تتبع معايير SAMA."},
     'Technology': {'pe_limit': 25, 'de_limit': 0.4, 'roe': 20, 'payout': 20, 'note': "🚀 تقنية: الأصول غير ملموسة، لذا نشترط انعدام الديون وكفاءة ROE عالية."},
-    'Real Estate': {'pe_limit': 22, 'de_limit': 1.1, 'payout': 70, 'roe': 8, 'note': "🏠 عقار (ريت): التوزيعات إلزامية، والديون طبيعية لنمو الأصول."},
+    'Real Estate': {'pe_limit': 22, 'de_limit': 1.1, 'payout': 70, 'roe': 8, 'note': "🏠 عقار (ريت): التوزيعات إلزامية، والديون طبيعية لتمويل الأصول."},
     'Default': {'pe_limit': 18, 'de_limit': 0.6, 'payout': 20, 'roe': 15, 'note': "⚖️ معايير قياسية: الالتزام الصارم بمدرسة القيمة (بافيت وجراهام)."}
 }
 
 with st.sidebar:
     st.markdown("<h3 style='color: #bb86fc;'>🔍 رادار التحكم الذكي</h3>", unsafe_allow_html=True)
-    symbol = st.text_input("رمز السهم (مثال: 2222):", "2222")
+    symbol = st.text_input("رمز السهم (تداول):", "2222")
     scan_btn = st.button("تفعيل المسح الشامل 🚀")
 
 if scan_btn:
-    with st.spinner("جاري فحص الـ 10 مؤشرات الذهبية وربط المصادر..."):
+    with st.spinner("جاري فحص الـ 10 مؤشرات الذهبية وربط البحث الذكي..."):
         try:
             ticker_sym = f"{symbol}.SR"
             stock = yf.Ticker(ticker_sym)
             info = stock.info
             divs = stock.dividends
             
-            # روابط المصادر الآمنة (بحث مباشر بالرمز)
-            tada_link = f"https://www.saudiexchange.sa{symbol}"
-            argaam_link = f"https://www.argaam.com{symbol}"
+            # روابط البحث الذكي (بحث جوجل الموجه لضمان الوصول 100%)
+            tada_search = f"https://www.google.com+{symbol}+قوائم+مالية"
+            argaam_search = f"https://www.google.com+{symbol}+مؤشرات+مالية"
 
             if 'currentPrice' in info or 'regularMarketPrice' in info:
                 price = info.get('currentPrice') or info.get('regularMarketPrice', 1)
@@ -67,18 +78,17 @@ if scan_btn:
                 score = 0
                 rows_html = ""
 
-                def add_row(name, result, criteria, explanation, is_pass, link):
+                def add_row(name, result, criteria, explanation, is_pass, search_url):
                     global score
                     if is_pass: score += 1
                     s_class = "row-pass" if is_pass else "row-fail"
                     t_class = "pass-text" if is_pass else "fail-text"
                     icon = "✅" if is_pass else "❌"
-                    source_html = f"<a href='{link}' target='_blank' class='source-link'>المصدر 🔗</a>"
+                    source_html = f"<a href='{search_url}' target='_blank' class='search-btn'>فتح المصدر 🔗</a>"
                     return f"<tr class='{s_class}'><td><b>{name}</b></td><td class='{t_class}'>{icon} {result}</td><td>{criteria}</td><td class='desc-text'>{explanation}</td><td>{source_html}</td></tr>"
 
                 # الحسابات
                 pe_val = info.get('trailingPE') or (price / (info.get('trailingEps') or 1))
-                # حساب العائد بتوقيت الرياض
                 if not divs.empty:
                     tz = divs.index.tz
                     one_year_ago = datetime.now(tz) - timedelta(days=365)
@@ -94,16 +104,16 @@ if scan_btn:
                 op_margin = (info.get('operatingMargins', 0) or 0) * 100
 
                 # عرض الصفوف (10 مؤشرات كاملة)
-                rows_html += add_row("سجل التوزيع", f"{div_yrs} سنة", "> 10 سنوات", "جراهام: الاستمرارية لعقد تثبت صلابة نموذج العمل.", div_yrs >= 10, argaam_link)
-                rows_html += add_row("نمو التوزيع", "مستمر" if div_yrs > 5 else "جديد", "> 0%", "لينش: نمو التوزيع السنوي يحميك من التضخم.", div_yrs > 5, argaam_link)
-                rows_html += add_row("مكرر الربحية (P/E)", f"{pe_val:.2f}", f"< {logic['pe_limit']}", "جراهام: نشتري السعر العادل لضمان هامش الأمان.", 0 < pe_val <= logic['pe_limit'], argaam_link)
-                rows_html += add_row("عائد التوزيع", f"{r_yield:.2f}%", "> 4%", "المعيار: النقد الفعلي الذي يدخل جيبك سنوياً.", r_yield >= 4.0, tada_link)
-                rows_html += add_row("نسبة التوزيع (Payout)", f"{payout:.1f}%", f"{logic['payout']}-75%", "الأمان: توازن المكافأة مع نمو الشركة.", logic['payout'] <= payout <= 75, tada_link)
-                rows_html += add_row("كفاءة الإدارة (ROE)", f"{roe:.1f}%", f"> {logic['roe']}%", "بافيت: قدرة الإدارة على تنمية أموال المساهمين.", roe >= logic['roe'], argaam_link)
-                rows_html += add_row("الهامش التشغيلي", f"{op_margin:.1f}%", "> 10%", "بافيت: يعكس قوة النشاط الأساسي الحقيقي.", op_margin >= 10, argaam_link)
-                rows_html += add_row("نسبة السيولة", f"{info.get('currentRatio', 1.5):.2f}", "> 1.2", "الأمان: القدرة على سداد الالتزامات القصيرة.", info.get('currentRatio', 1.2) >= 1.2, tada_link)
-                rows_html += add_row("نسبة المديونية (D/E)", f"{de_ratio:.2f}", f"< {logic['de_limit']}", "الملاءة: ديون منخفضة تعني حصانة ضد الفائدة.", de_ratio <= logic['de_limit'], tada_link)
-                rows_html += add_row("نمو الأرباح", f"{(info.get('earningsQuarterlyGrowth',0)*100):.1f}%", "> 5%", "لينش: استمرار النمو يرفع قيمة السهم مستقبلاً.", (info.get('earningsQuarterlyGrowth',0)*100) >= 5, argaam_link)
+                rows_html += add_row("سجل التوزيع", f"{div_yrs} سنة", "> 10 سنوات", "جراهام: الاستمرارية لعقد تثبت صلابة نموذج العمل.", div_yrs >= 10, argaam_search)
+                rows_html += add_row("نمو التوزيع", "مستمر" if div_yrs > 5 else "جديد", "> 0%", "لينش: نمو التوزيع السنوي يحميك من التضخم.", div_yrs > 5, argaam_search)
+                rows_html += add_row("مكرر الربحية (P/E)", f"{pe_val:.2f}", f"< {logic['pe_limit']}", "جراهام: نشتري السعر العادل لضمان هامش الأمان.", 0 < pe_val <= logic['pe_limit'], argaam_search)
+                rows_html += add_row("عائد التوزيع", f"{r_yield:.2f}%", "> 4%", "المعيار: النقد الفعلي الذي يدخل جيبك سنوياً.", r_yield >= 4.0, tada_search)
+                rows_html += add_row("نسبة التوزيع (Payout)", f"{payout:.1f}%", f"{logic['payout']}-75%", "الأمان: توازن المكافأة مع نمو الشركة.", logic['payout'] <= payout <= 75, tada_search)
+                rows_html += add_row("كفاءة الإدارة (ROE)", f"{roe:.1f}%", f"> {logic['roe']}%", "بافيت: قدرة الإدارة على تنمية أموال المساهمين.", roe >= logic['roe'], argaam_search)
+                rows_html += add_row("الهامش التشغيلي", f"{op_margin:.1f}%", "> 10%", "بافيت: يعكس قوة النشاط الأساسي الحقيقي.", op_margin >= 10, argaam_search)
+                rows_html += add_row("نسبة السيولة", f"{info.get('currentRatio', 1.5):.2f}", "> 1.2", "الأمان: القدرة على سداد الالتزامات القصيرة.", info.get('currentRatio', 1.2) >= 1.2, tada_search)
+                rows_html += add_row("نسبة المديونية (D/E)", f"{de_ratio:.2f}", f"< {logic['de_limit']}", "الملاءة: ديون منخفضة تعني حصانة ضد الفائدة.", de_ratio <= logic['de_limit'], tada_search)
+                rows_html += add_row("نمو الأرباح", f"{(info.get('earningsQuarterlyGrowth',0)*100):.1f}%", "> 5%", "لينش: استمرار النمو يرفع قيمة السهم مستقبلاً.", (info.get('earningsQuarterlyGrowth',0)*100) >= 5, argaam_search)
 
                 # النتيجة النهائية
                 st.subheader(f"💎 تقرير التدقيق لشركة: {info.get('longName', symbol)}")
@@ -113,9 +123,9 @@ if scan_btn:
                 st.markdown(f"<div class='status-box' style='color:{s_color};'>{s_text} ({score}/10)</div>", unsafe_allow_html=True)
                 if score >= 8: st.balloons()
                 
-                st.markdown(f"""<table class='styled-table'><thead><tr><th>المؤشر المالي</th><th>النتيجة</th><th>المعيار</th><th>الفلسفة</th><th>المصدر</th></tr></thead><tbody>{rows_html}</tbody></table>""", unsafe_allow_html=True)
+                st.markdown(f"""<table class='styled-table'><thead><tr><th>المؤشر المالي</th><th>النتيجة</th><th>المعيار</th><th>الفلسفة</th><th>المصدر الرسمي</th></tr></thead><tbody>{rows_html}</tbody></table>""", unsafe_allow_html=True)
 
         except Exception as e:
             st.error(f"⚠️ خطأ تقني في جلب البيانات: {str(e)}")
 
-st.markdown("<p style='text-align: center; color: #444; font-size: 0.8em; margin-top: 50px;'>CASH RADAR PRO | OFFICIAL FIXED EDITION 2026</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #444; font-size: 0.8em; margin-top: 50px;'>CASH RADAR PRO | SEARCH ASSIST EDITION 2026</p>", unsafe_allow_html=True)
