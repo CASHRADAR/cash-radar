@@ -1,134 +1,108 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import plotly.graph_objects as go
 
-st.set_page_config(page_title="كاش رادار | Cash Radar PRO", layout="wide")
+# إعدادات الصفحة
+st.set_page_config(page_title="كاش رادار | نسخة النخبة الاستثمارية", layout="wide")
 
-# تصميم الهوية البصرية
-st.markdown("""
-    <style>
-    .main { background-color: #0e1117; }
-    .metric-card { background-color: #161b22; border: 1px solid #30363d; padding: 15px; border-radius: 10px; margin-bottom: 10px; }
-    h1, h2, h3 { color: #00c853; text-align: center; }
-    . aristocratic { color: #d4af37; font-weight: bold; font-size: 1.5em; }
-    </style>
-    """, unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #00c853;'>📡 كاش رادار: التدقيق المالي المعتمد</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #8b949e;'>تحليل شامل وفق معايير (بنجامين جراهام، وارن بافيت، وبيتر لينش)</p>", unsafe_allow_html=True)
 
-st.title("📡 كاش رادار: نسخة النخبة الاستثمارية")
-st.write("---")
+symbol = st.sidebar.text_input("🔍 رمز السهم (مثال: 2222):", "2222")
 
-symbol = st.sidebar.text_input("🔍 أدخل رمز السهم (مثال: 2222):", "2222")
-
-if st.sidebar.button("تشغيل المسح الشامل 🚀"):
-    with st.spinner("جاري جلب البيانات المالية التاريخية وتحليل المحاور الثلاثة..."):
+if st.sidebar.button("تشغيل المسح العميق 🚀"):
+    with st.spinner("جاري فحص القوائم المالية وتطبيق معايير النخبة..."):
         ticker_sym = f"{symbol}.SR"
         stock = yf.Ticker(ticker_sym)
-        
-        # جلب البيانات
         info = stock.info
-        hist_divs = stock.dividends
-        financials = stock.financials # قائمة الدخل
-        balance_sheet = stock.balance_sheet # الميزانية
-        cashflow = stock.cashflow # التدفقات النقدية
+        divs = stock.dividends
         
-        if not financials.empty and 'regularMarketPrice' in info:
-            price = info.get('regularMarketPrice', 0)
+        if not divs.empty and 'regularMarketPrice' in info:
             score = 0
-            analysis = []
+            results = []
 
-            # --- المحور الأول: الأمان والاستمرارية (الماضي) ---
-            # 1. سجل التوزيعات (10 سنوات)
-            div_years = len(hist_divs.groupby(hist_divs.index.year).sum())
-            if div_years >= 10:
+            # --- المحور الأول: سجل التاريخ (الماضي) ---
+            yearly_divs = divs.groupby(divs.index.year).sum()
+            div_years_count = len(yearly_divs)
+            
+            # 1. سجل التوزيعات
+            if div_years_count >= 10:
                 score += 1
-                analysis.append("✅ سجل توزيعات طويل (أكثر من 10 سنوات)")
-            else: analysis.append("❌ سجل توزيعات قصير")
+                results.append(f"✅ **مؤشر استمرارية التوزيعات:** الشركة وزعت لـ ({div_years_count}) سنة مستمرة. (المعيار: > 10 سنوات)")
+            else:
+                results.append(f"❌ **مؤشر استمرارية التوزيعات:** السجل قصير ({div_years_count}) سنة فقط. (المعيار: > 10 سنوات)")
 
-            # 2. نمو التوزيعات (5 سنوات)
-            div_growth = hist_divs.groupby(hist_divs.index.year).sum().tail(5).pct_change().dropna()
-            if not div_growth.empty and (div_growth > 0).all():
+            # 2. نمو التوزيع (آخر 5 سنوات)
+            if len(yearly_divs) >= 5:
+                last_5 = yearly_divs.tail(5)
+                growth = ((last_5.iloc[-1] - last_5.iloc[0]) / last_5.iloc[0]) * 100
+                if growth > 0:
+                    score += 1
+                    results.append(f"✅ **مؤشر نمو التوزيعات:** زادت بنسبة ({growth:.1f}%) خلال آخر 5 سنوات. (المعيار: نمو إيجابي)")
+                else:
+                    results.append(f"❌ **مؤشر نمو التوزيعات:** لم يتحقق نمو ({growth:.1f}%). (المعيار: نمو إيجابي)")
+
+            # --- المحور الثاني: الملاءة المالية (الحاضر) ---
+            # 3. نسبة التوزيع
+            payout = (info.get('payoutRatio', 0) or 0) * 100
+            if 20 <= payout <= 70:
                 score += 1
-                analysis.append("✅ نمو مستمر في التوزيعات لآخر 5 سنوات")
-            else: analysis.append("❌ لا يوجد نمو مستمر في التوزيعات")
+                results.append(f"✅ **مؤشر نسبة التوزيع (Payout Ratio):** النسبة مثالية ({payout:.1f}%). (المعيار: 20% - 70%)")
+            else:
+                results.append(f"❌ **مؤشر نسبة التوزيع (Payout Ratio):** النسبة غير متزنة ({payout:.1f}%). (المعيار: 20% - 70%)")
 
-            # 3. سجل الأرباح (صافي ربح موجب)
-            net_income = financials.loc['Net Income'].tail(10) if 'Net Income' in financials.index else pd.Series()
-            if (net_income > 0).sum() >= 9:
+            # 4. نسبة السيولة
+            curr_ratio = info.get('currentRatio', 0) or 0
+            if curr_ratio >= 1.5:
                 score += 1
-                analysis.append("✅ سجل أرباح نظيف (ربحية في 9 من أصل 10 سنوات)")
-            else: analysis.append("❌ سجل أرباح متذبذب")
+                results.append(f"✅ **مؤشر نسبة السيولة (Current Ratio):** سيولة قوية ({curr_ratio:.2f}). (المعيار: > 1.5)")
+            else:
+                results.append(f"❌ **مؤشر نسبة السيولة (Current Ratio):** سيولة ضعيفة ({curr_ratio:.2f}). (المعيار: > 1.5)")
 
-            # --- المحور الثاني: الملاءة والقدرة (الحاضر) ---
-            # 4. نسبة التوزيع (20-60%)
-            payout = info.get('payoutRatio', 0)
-            if 0.2 <= payout <= 0.6:
+            # 5. نسبة الديون
+            de_ratio = info.get('debtToEquity', 0) or 0
+            if 0 < de_ratio <= 60:
                 score += 1
-                analysis.append(f"✅ نسبة توزيع آمنة ومستدامة ({payout*100:.1f}%)")
-            else: analysis.append(f"❌ نسبة التوزيع غير مثالية ({payout*100:.1f}%)")
+                results.append(f"✅ **مؤشر نسبة الديون (D/E Ratio):** ديون آمنة ({de_ratio:.1f}%). (المعيار: < 60%)")
+            else:
+                results.append(f"❌ **مؤشر نسبة الديون (D/E Ratio):** ديون مقلقة ({de_ratio:.1f}%). (المعيار: < 60%)")
 
-            # 5. نسبة السيولة (Current Ratio > 2)
-            current_ratio = info.get('currentRatio', 0)
-            if current_ratio >= 2:
-                score += 1
-                analysis.append(f"✅ سيولة قوية: النسبة الجارية {current_ratio:.2f}")
-            else: analysis.append(f"❌ سيولة ضعيفة: النسبة الجارية {current_ratio:.2f}")
-
-            # 6. نسبة الديون (Debt/Equity < 0.5)
-            de_ratio = info.get('debtToEquity', 0) / 100
-            if 0 < de_ratio <= 0.5:
-                score += 1
-                analysis.append(f"✅ ديون منخفضة وآمنة ({de_ratio:.2f})")
-            else: analysis.append(f"❌ ديون مرتفعة نسبياً ({de_ratio:.2f})")
-
-            # 7. التدفق النقدي الحر (FCF > Dividends)
-            fcf = cashflow.loc['Free Cash Flow'].iloc[0] if 'Free Cash Flow' in cashflow.index else 0
-            total_div_paid = abs(cashflow.loc['Cash Dividends Paid'].iloc[0]) if 'Cash Dividends Paid' in cashflow.index else 0
-            if fcf > total_div_paid:
-                score += 1
-                analysis.append("✅ التدفق النقدي يغطي التوزيعات بزيادة")
-            else: analysis.append("❌ التوزيعات تضغط على السيولة النقدية")
-
-            # --- المحور الثالث: الجودة والسعر العادل (المستقبل) ---
-            # 8. العائد على حقوق المساهمين (ROE > 15%)
-            roe = info.get('returnOnEquity', 0)
-            if roe >= 0.15:
-                score += 1
-                analysis.append(f"✅ كفاءة إدارة عالية: ROE {roe*100:.1f}%")
-            else: analysis.append(f"❌ ROE أقل من المستهدف ({roe*100:.1f}%)")
-
-            # 9. مكرر الربحية (P/E < 20)
-            pe = info.get('trailingPE', 0)
+            # --- المحور الثالث: الجودة والسعر (المستقبل) ---
+            # 6. مكرر الربحية
+            pe = info.get('trailingPE', 0) or 0
             if 0 < pe <= 20:
                 score += 1
-                analysis.append(f"✅ سعر عادل: مكرر الربحية {pe:.2f}")
-            else: analysis.append(f"❌ سعر متضخم: مكرر الربحية {pe:.2f}")
-
-            # 10. نمو الأرباح (EPS Growth > 5%)
-            eps_growth = info.get('earningsQuarterlyGrowth', 0)
-            if eps_growth >= 0.05:
-                score += 1
-                analysis.append(f"✅ نمو أرباح جيد ({eps_growth*100:.1f}%)")
-            else: analysis.append(f"❌ نمو أرباح ضعيف ({eps_growth*100:.1f}%)")
-
-            # --- عرض النتائج النهائية ---
-            st.header(f"نتائج رادار النخبة: {info.get('longName', symbol)}")
-            
-            # عرض التقييم النهائي
-            st.write("---")
-            if score >= 8:
-                st.balloons()
-                st.markdown(f"<p class='aristocratic'>🏆 التقييم النهائي: {score}/10 - سهم أرستقراطي ممتاز</p>", unsafe_allow_html=True)
-            elif score >= 5:
-                st.warning(f"🟡 التقييم النهائي: {score}/10 - سهم عوائد جيد (يحتاج مراقبة)")
+                results.append(f"✅ **مكرر الربحية (P/E Ratio):** السعر عادل حالياً ({pe:.2f}). (المعيار: < 20)")
             else:
-                st.error(f"🔴 التقييم النهائي: {score}/10 - سهم خطر (فخ عائد)")
+                results.append(f"❌ **مكرر الربحية (P/E Ratio):** السعر متضخم ({pe:.2f}). (المعيار: < 20)")
 
-            # عرض تفاصيل المحاور
-            with st.expander("تفاصيل الفحص لجميع المعايير"):
-                for item in analysis:
-                    st.write(item)
+            # 7. العائد على حقوق المساهمين
+            roe = (info.get('returnOnEquity', 0) or 0) * 100
+            if roe >= 15:
+                score += 1
+                results.append(f"✅ **مؤشر كفاءة الإدارة (ROE):** كفاءة عالية ({roe:.1f}%). (المعيار: > 15%)")
+            else:
+                results.append(f"❌ **مؤشر كفاءة الإدارة (ROE):** كفاءة ضعيفة ({roe:.1f}%). (المعيار: > 15%)")
+
+            # --- التقييم النهائي ---
+            st.header(f"تقرير التدقيق المالي لشركة: {info.get('longName', symbol)}")
+            st.write("---")
+            
+            if score >= 6:
+                st.success(f"🏆 النتيجة النهائية لـ كاش رادار: {score}/7 | السهم ضمن النخبة الأرستقراطية.")
+            elif score >= 4:
+                st.warning(f"🟡 النتيجة النهائية لـ كاش رادار: {score}/7 | سهم عوائد جيد ولكن يحتاج لمراقبة.")
+            else:
+                st.error(f"🔴 النتيجة النهائية لـ كاش رادار: {score}/7 | فخ عائد محتمل - مخاطرة عالية.")
+
+            # عرض القائمة التفصيلية بربط المؤشر بالنتيجة والمعيار
+            st.subheader("📋 تفاصيل نتائج رادار النخبة:")
+            for r in results:
+                st.write(r)
+                
+            # إضافة الرسم البياني للتوزيعات
+            with st.expander("👁️ تدقيق سجل التوزيعات السنوية الفعلي"):
+                st.bar_chart(yearly_divs)
+                st.table(yearly_divs.sort_index(ascending=False))
         else:
-            st.error("لم يتم العثور على بيانات مالية كافية لهذا الرمز.")
-
-st.info("ملاحظة: كاش رادار يقوم الآن بفحص الميزانية والتدفقات النقدية وقائمة الدخل لآخر 10 سنوات لإتمام التقييم.")
+            st.error("❌ تعذر جلب بيانات التوزيعات أو الميزانية. تأكد من الرمز (مثال: 2222 للسوق السعودي).")
